@@ -4,11 +4,11 @@
 
 This repository documents a low-cost experimental **free-space optical (FSO) communication link** built around two ATmega328P microcontrollers. Text is framed digitally, transmitted by **on-off keying (OOK)** of a laser, recovered by a digital optical receiver, decoded with timer-based bit sampling, and displayed on an OLED.
 
-> **Project status:** end-to-end firmware and hardware prototype implemented. The firmware is configured for a **nominal 50 µs bit period (20 kbit/s raw line rate)**. Precise bit timing, packet-error rate, range, and environmental robustness are intentionally listed as measurements still to be characterized rather than claimed as verified results.
+The firmware is configured for a **nominal 50 µs bit period**, corresponding to a **20 kbit/s raw optical line rate**.
 
 ## Engineering focus
 
-This is more than a laser-on/laser-off demonstration. The implementation explores the complete embedded communication chain:
+The project implements the full embedded optical communication chain rather than only switching a laser on and off:
 
 - **Digital message framing** using STX / payload / ETX
 - **Asynchronous serial-style optical signaling** with start, data, and stop bits
@@ -36,6 +36,16 @@ flowchart LR
 
 The two embedded nodes exchange payload data **only through light**. No electrical data wire is required between transmitter and receiver.
 
+## Project documentation
+
+The repository is intended to include three visual references documenting the physical implementation:
+
+1. `docs/setup.jpg` — complete transmitter / receiver optical setup
+2. `docs/connections.jpg` — wiring and hardware connections
+3. `docs/sending-timing.jpg` — transmitted optical timing / bit waveform
+
+These images document the physical build, wiring, and timing behavior of the optical link.
+
 ## Communication protocol
 
 Optical `1` = laser **ON**  
@@ -43,7 +53,7 @@ Optical `0` = laser **OFF**
 
 Each byte uses an asynchronous 8N1-style frame:
 
-| Field | Value | Duration at configured timing |
+| Field | Value | Duration |
 | --- | --- | ---: |
 | Start | `0` | 50 µs |
 | Data | 8 bits, LSB first | 400 µs |
@@ -62,13 +72,11 @@ Example: ASCII `H = 0x48 = 01001000₂`. Because data is transmitted LSB first, 
 0 0 0 1 0 0 1 0
 ```
 
-The configured raw line rate follows directly from the bit period:
+The configured raw line rate follows from the bit period:
 
 ```text
 R_raw = 1 / 50 µs = 20,000 bit/s
 ```
-
-This is a **nominal timing target**, not yet a measured channel-capacity or error-free throughput claim.
 
 ## Timing implementation
 
@@ -82,11 +90,11 @@ Timer clock = 16 MHz / 8 = 2 MHz
 
 ### Transmitter
 
-The transmitter uses absolute timer deadlines and direct access to `PORTB` for D8. This avoids accumulating the software overhead that would occur if each bit were generated using repeated `digitalWrite()` and `delayMicroseconds()` calls.
+The transmitter uses absolute timer deadlines and direct access to `PORTB` for D8. This reduces accumulated timing error compared with generating every bit using repeated high-level GPIO calls and software delays.
 
 ### Receiver
 
-The receiver detects the idle-to-start transition, then samples approximately at the center of the start bit and each subsequent data/stop bit. This is a compact software implementation of asynchronous timing recovery; it does **not** replace a PLL/CDR or oversampling receiver used in higher-performance links.
+The receiver detects the idle-to-start transition and samples approximately at the center of the start bit and subsequent data/stop bits. This provides a compact software implementation of asynchronous symbol timing on the microcontroller.
 
 ## Hardware
 
@@ -130,15 +138,16 @@ free-space-optical-communication/
 │   ├── receiver.ino
 │   └── MiniOLED.h
 └── docs/
-    ├── engineering-notes.md
-    └── verification-plan.md
+    ├── setup.jpg
+    ├── connections.jpg
+    └── sending-timing.jpg
 ```
 
 ## Build and run
 
 1. Wire and align both optical modules with power off.
 2. Upload `transmitter/transmitter.ino` to a classic **Arduino UNO / ATmega328P / 16 MHz**.
-3. Upload `receiver/receiver.ino` to a classic **Arduino Nano / ATmega328P / 16 MHz**. Some clones require the old bootloader option.
+3. Upload `receiver/receiver.ino` to a classic **Arduino Nano / ATmega328P / 16 MHz**. Some Nano clones require the old bootloader option.
 4. Power the receiver and confirm the OLED shows `WAITING`.
 5. Align the laser beam with the receiver.
 6. Enter a message on the keypad and press `*` to transmit.
@@ -146,50 +155,19 @@ free-space-optical-communication/
 
 The current keypad demo remaps physical `D → H` and `# → I`; this makes it possible to enter `HHI` with the available 4×4 keypad while keeping the optical protocol itself general for printable ASCII payload bytes.
 
-## Verification strategy
+## Current limitations
 
-A professional communication prototype should report measurements, not only successful screenshots. The next characterization stage is defined explicitly in [`docs/verification-plan.md`](docs/verification-plan.md):
+The present system is a compact educational FSO prototype. Its main limitations are:
 
-- measure transmitter D8 and receiver OUT timing with an oscilloscope / logic analyzer,
-- verify the configured 50 µs bit period,
-- run repeated packet tests with changing payloads,
-- record packet success/error statistics,
-- sweep distance and alignment,
-- compare bright-room and low-ambient-light operation,
-- characterize failure behavior when the beam is partially or fully blocked.
-
-This separates **implemented design** from **measured performance**.
-
-## Engineering limitations
-
-The present system is deliberately simple and should not be confused with a research-grade optical modem. Current limitations include:
-
-- digital threshold receiver rather than a characterized photodiode + analog front end,
-- no measured optical power or link budget,
-- no CRC/FEC, acknowledgement, or automatic retransmission,
-- no measured BER/PER curve,
-- polling-based start detection with finite software latency,
-- no oversampling or clock-recovery loop,
-- sensitivity to alignment, receiver bandwidth, ambient light, and module threshold,
-- no beam tracking or atmospheric compensation,
-- application-level 150 ms pause after a packet to allow OLED refresh.
-
-## Research-oriented next steps
-
-The most valuable upgrades are not cosmetic. They turn the prototype into a more meaningful communications experiment:
-
-1. **Automated packet generator + CRC-8** to measure packet-error rate instead of judging the OLED visually.
-2. **Photodiode + transimpedance amplifier (TIA)** to expose the analog optical waveform rather than hiding it behind a digital module comparator.
-3. **Oscilloscope characterization** of rise/fall time, jitter, eye opening, and receiver threshold margin.
-4. **Rate sweep** to determine the maximum reliable link rate for the actual optical hardware.
-5. **Distance/alignment sweep** to quantify geometric loss and sensitivity.
-6. **Ambient-light tests and optical filtering** to evaluate interference rejection.
-7. **Link-budget model** using measured source power, geometry, detector responsivity/sensitivity, and receiver noise.
-8. **Hardware-timer / interrupt or capture-based receiver architecture** for lower timing uncertainty.
+- digital threshold receiver rather than a dedicated analog photodiode front end,
+- no CRC/FEC or acknowledgement layer,
+- polling-based receiver timing,
+- sensitivity to optical alignment and ambient light,
+- no beam tracking or atmospheric compensation.
 
 ## Relevance to Fraunhofer HHI / optical communications
 
-Fraunhofer HHI's **Photonic Networks and Systems** department includes research on **free-space optical systems** and laser-based point-to-point communication links. This prototype is intentionally much simpler and many orders of magnitude slower, but it exercises the same fundamental end-to-end chain at educational scale:
+Fraunhofer HHI's **Photonic Networks and Systems** activities include free-space optical communication and laser-based point-to-point links. This prototype operates at a much smaller scale, but it implements the same fundamental communication sequence:
 
 ```text
 digital payload
@@ -198,13 +176,11 @@ digital payload
 → optical intensity modulation
 → free-space propagation
 → photodetection
-→ timing/symbol decision
+→ timing / symbol decision
 → payload reconstruction
 ```
 
-That makes the project useful preparation for deeper work in optical transmitters/receivers, detector front ends, communication measurements, DSP, and link characterization.
-
-See also: [`docs/engineering-notes.md`](docs/engineering-notes.md)
+The project therefore provides practical experience with concepts directly relevant to optical transmitters and receivers, embedded timing, photodetection, free-space propagation, and digital communication systems.
 
 ## Safety
 
