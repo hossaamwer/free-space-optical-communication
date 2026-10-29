@@ -2,7 +2,7 @@
 
 A small free-space optical link I built to send text between two Arduino boards using a laser as the communication channel.
 
-🔗 **[View the LinkedIn project post](https://lnkd.in/p/drneHqyc)**
+🔗 **[View the LinkedIn project post](https://lnkd.in/p/d7utTtXd)**
 
 The transmitter reads a message from a 4×4 keypad, sends it using on-off keying (OOK), and the receiver reconstructs the bytes and shows the result on an OLED.
 
